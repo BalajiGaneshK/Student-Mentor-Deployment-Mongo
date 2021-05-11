@@ -11,7 +11,8 @@ require('dotenv').config();
 
 //Mongo Atlas data
 // username: demoDb Password: mlIF17UGQHxvFJJ1 
-const dbUrl =  'mongodb://127.0.0.1:27017'|| process.env.DB_URL ;
+const dbUrl = 'mongodb://127.0.0.1:27017' || process.env.DB_URL;
+const port = process.env.PORT || 4000;
 
 let st = "";
 let students = [{ "student_id": "1", "name": "Balaji", "mentor_id": "100" }, { "student_id": "2", "name": "Ganesh", "mentor_id": "101" }];
@@ -284,67 +285,7 @@ app.put('/edit-student/:id', async (req, res) => {
         
     } 
 
-    //let students = await db.collection("students").find().toArray();
-    //let mentors = await db.collection("mentors").find().toArray();
    
-
-
-    /*
-    //Searching for student, if found, found=1
-    for (let i = 0; i < students.length; i++)
-    {
-        if (students[i].student_id === req.params.id)
-        {
-            found = 1;
-
-            console.log(req.body.mentor);
-            let mentor_id = req.body.mentor;
-
-            let mentorAlreadyPresent = helperFns.checkMentorAlreadyPresent;
-            let isMentorPresent = mentorAlreadyPresent(mentor_id, mentors);
-
-                
-            if (!isMentorPresent)
-            {
-                res.status(404).json({"Error":"No such Mentor available"})
-            }
-
-            else
-            {   //Update the student record
-                await db.collection("students").findOneAndUpdate({student_id: students[i].student_id},{mentor_id:mentor_id})
-                //students[i].mentor_id = mentor_id;ii      
-                
-                 //Update the corresponding mentors' (both Old and New) records
-                if (students[i].mentor_id !== "")
-                {
-                    //Old mentor Updation
-                    let old_mentor_id = students[i].mentor_id;
-                    
-                    //Find the Old mentor record and remove the student from his student's list
-                    let old_mentor=await db.collection("mentors").findOne({mentor_id:old_mentor_id});
-                    let old_mentor_students = old_mentor.student_ids;
-                    let index_of_current_student = old_mentor_students.indexOf(students[i].student_id);
-                    let updated_old_mentor_students = old_mentor_students.splice(index_of_current_student, 1);
-
-                    //Updating the old mentor
-                    await db.collection("mentors").updateOne({ _id: old_mentor._id }, { student_ids: updated_old_mentor_students } );
-                    
-                    //updating the new mentor
-                    await db.collection("mentors").updateOne({ mentor_id: mentor_id }, { $push: { student_ids: students[i].student_id }})
-                }
-                res.status(200).json({ "Success": students[i] });
-            }
-            
-               
-        }
-
-      
-    }
-
-     if(found===0)
-            res.status(400).json({ "Error": "No such student available" });
-            */
-       
     
 })
 
@@ -427,4 +368,4 @@ app.delete('/delete-mentor/:id', async (req, res) => {
     clientInfo.close();
     
 })
-app.listen(4001,()=>{console.log("App runs with 4001")});
+app.listen(port,()=>{console.log("App runs with ",port)});
