@@ -10,7 +10,7 @@ const objectId = mongodb.ObjectID;
 
 //Mongo Atlas data
 // username: demoDb Password: mlIF17UGQHxvFJJ1 
-//good day
+//good days
 
 let st = "";
 let students = [{ "student_id": "1", "name": "Balaji", "mentor_id": "100" }, { "student_id": "2", "name": "Ganesh", "mentor_id": "101" }];
