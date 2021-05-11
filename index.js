@@ -19,7 +19,7 @@ app.get('/students', async (req, res) => {
         
     let clientInfo = await mongoClient.connect(dbUrl);
     let db = clientInfo.db("student_mentor_db");
-    let data = await db.collection("students").find().toArray();
+    let data = await db.collection("students").find().toArray(); 
     res.status(200).json({ "Success": data });
         
     }
@@ -95,6 +95,15 @@ app.post('/create-student', async (req, res)=> {
     
     let student = req.body;
     let clientInfo = await mongoClient.connect(dbUrl);
+
+    if (student.mentor_id !== "")
+        res.status(400).json({ "Error": "Cannot assign Mentor in /create-student endpoint. Use /edit-student only" })
+
+    else
+    {
+       
+    try {
+
     let db = clientInfo.db("student_mentor_db");
     let students = await db.collection("students").find().toArray();
 
@@ -111,6 +120,17 @@ app.post('/create-student', async (req, res)=> {
        await db.collection("students").insertOne(student);  
         res.status(200).json({ "Success":"Student created"});
     }
+        
+    }
+
+    catch(error)
+    {
+        console.log(error);
+    }
+    }
+
+    
+   
     clientInfo.close();
 });
 
@@ -146,6 +166,9 @@ app.post('/create-mentor', async (req, res)=> {
 app.put('/edit-mentor/:id', async (req, res) => {
 
     let clientInfo = await mongoClient.connect(dbUrl);
+    try
+    {
+        
     let db = clientInfo.db("student_mentor_db");
     let students = await db.collection("students").find().toArray();
     let mentors = await db.collection("mentors").find().toArray();
@@ -180,30 +203,29 @@ app.put('/edit-mentor/:id', async (req, res) => {
             if (wrongInputData === 0)
             {
                 //Updating selected mentor with assigned students
-                /*for (let x = 0; x < req.body.students.length; x++)
-                mentors[i].student_ids.push(req.body.students[x]);*/
 
-                db.collection("mentors").findOneAndUpdate({_id:objectId(mentors[i]._id)},{
+                await db.collection("mentors").updateOne({_id:objectId(mentors[i]._id)},{
                 $push: {
                 student_ids: {
-                $each: [ req.body.students ]
+                  $each:[...req.body.students ]
                 }
                 }
                 })
                 
                 //Updating assigned students records
-                /*for (let k = 0; k < students.length; k++)
+                for (let k = 0; k < students.length; k++)
                 {
-                    if (req.body.students.includes(students[k].student_id))
-                    students[k].mentor_id = mentors[i].mentor_id;
-                }*/
+                    if (req.body.students.includes(students[k].student_id)) {
+                        
+                        await db.collection("students").findOneAndUpdate({ _id: objectId(students[k]._id) }, {$set: { mentor_id: mentors[i].mentor_id }})
+                        //students[k].mentor_id = mentors[i].mentor_id;
+                    } 
+                }
 
-                db.collection("students").findAndModify({
-                    query: {},
-                    
-                    update: {}
-                })
-                res.status(200).json({ "Mentor Updated": mentors[i] });
+                
+                let updatedMentor = await db.collection("mentors").findOne({ _id: objectId(mentors[i]._id) })
+                console.log(updatedMentor);
+                res.status(200).json({ "Mentor Updated": updatedMentor });
             }
             
         }
@@ -215,12 +237,56 @@ app.put('/edit-mentor/:id', async (req, res) => {
             res.status(400).json({ "Error": "No such mentor available" });
        
     
+    }
+
+    catch (error)
+    {
+        console.log(error);
+    }
+    clientInfo.close();
+    
 })
 
 //Assigning mentor for a particular student
-app.put('/edit-student/:id', (req, res) => {
+app.put('/edit-student/:id', async (req, res) => {
     let found = 0;
+
+    let clientInfo = await mongoClient.connect(dbUrl);
+    let db = clientInfo.db("student_mentor_db");
+    let student = await db.collection("students").findOne({ student_id: req.params.id });
+    let mentorToBeAssigned = await db.collection("mentors").findOne({ mentor_id: req.body.mentor });
+
+    if (student === null)
+        res.status(404).json({ "Error": "No such student found in database" })
+
+    else if (mentorToBeAssigned === null)
+        res.status(404).json({ "Error": "No such mentor found in database" })
     
+    else
+    {
+        console.log("Mentor found", mentorToBeAssigned);
+        
+        //Update old mentor records &remove the current student from his students list
+        await db.collection("mentors").findOneAndUpdate({ mentor_id: student.mentor_id }, { $pull: { student_ids: student.student_id } });
+
+        //Add new mentor id to current student
+        await db.collection("students").findOneAndUpdate({ _id: objectId(student._id) }, { $set: { mentor_id: mentorToBeAssigned.mentor_id } });
+
+        //Update new mentor record with current student's details
+        await db.collection("mentors").findOneAndUpdate({ mentor_id: req.body.mentor }, { $push: { student_ids: req.params.id } });
+        
+        let updatedStudent = await db.collection("students").findOne({ student_id: req.params.id });
+        res.status(200).json({ "Mentor assigned successfully": updatedStudent });
+
+        
+    } 
+
+    //let students = await db.collection("students").find().toArray();
+    //let mentors = await db.collection("mentors").find().toArray();
+   
+
+
+    /*
     //Searching for student, if found, found=1
     for (let i = 0; i < students.length; i++)
     {
@@ -241,11 +307,32 @@ app.put('/edit-student/:id', (req, res) => {
             }
 
             else
-            {
-                students[i].mentor_id = mentor_id;
+            {   //Update the student record
+                await db.collection("students").findOneAndUpdate({student_id: students[i].student_id},{mentor_id:mentor_id})
+                //students[i].mentor_id = mentor_id;ii      
+                
+                 //Update the corresponding mentors' (both Old and New) records
+                if (students[i].mentor_id !== "")
+                {
+                    //Old mentor Updation
+                    let old_mentor_id = students[i].mentor_id;
+                    
+                    //Find the Old mentor record and remove the student from his student's list
+                    let old_mentor=await db.collection("mentors").findOne({mentor_id:old_mentor_id});
+                    let old_mentor_students = old_mentor.student_ids;
+                    let index_of_current_student = old_mentor_students.indexOf(students[i].student_id);
+                    let updated_old_mentor_students = old_mentor_students.splice(index_of_current_student, 1);
+
+                    //Updating the old mentor
+                    await db.collection("mentors").updateOne({ _id: old_mentor._id }, { student_ids: updated_old_mentor_students } );
+                    
+                    //updating the new mentor
+                    await db.collection("mentors").updateOne({ mentor_id: mentor_id }, { $push: { student_ids: students[i].student_id }})
+                }
                 res.status(200).json({ "Success": students[i] });
             }
             
+               
         }
 
       
@@ -253,78 +340,88 @@ app.put('/edit-student/:id', (req, res) => {
 
      if(found===0)
             res.status(400).json({ "Error": "No such student available" });
+            */
        
     
 })
 
 //Deleting a student
-app.delete('/delete-student/:id', (req, res) => {
-  
-    let found = 0;
-    
-    //Searching for student, if found, found=1
-    for (let i = 0; i < students.length; i++)
-    {
-        if (students[i].student_id === req.params.id)
-
-        {
-            found = 1;
-            let deletedStudent = students[i];
-            
-            //Deleting student details in the associated mentor
-            for (let k = 0; k < mentors.length; k++)
-                if (mentors[k].student_ids.includes(deletedStudent.mentor_id))
-                {
-                    for (let x = 0; x < mentors[k].student_ids.length; x++)
-                    {
-                        if (mentors[k].student_ids[x] === deletedStudent.student_id)
-                            mentors[k].student_ids.splice(x, 1);
-                    }
-                }
-            students.splice(i, 1);
-            res.status(200).json({ "Deleted Successfully": deletedStudent });
+app.delete('/delete-student/:id', async (req, res) => {  
+    let clientInfo = await mongoClient.connect(dbUrl); 
+    try {
         
-        }
-      
-    }
+    
+    let db = clientInfo.db("student_mentor_db");
+         let student = await db.collection("students").findOne({ student_id: req.params.id });
+         //let mentors = await db.collection("mentors").find().toArray();
+         if(student===null)
+         res.status(404).json({"Error":"No such student in the records"});
 
-     if(found===0)
-            res.status(400).json({ "Error": "No such student available" });
+         else
+         {
+             console.log(student," is retrieved");
+         let asso_mentor_id = student.mentor_id;
+
+         await db.collection("mentors").updateOne({ mentor_id: asso_mentor_id }, {
+            
+            $pull: {student_ids: student.student_id}
+         });
+
+         //let asso_mentor = await db.collections("mentors").find({ mentor_id: asso_mentor_id });
+         await db.collection("students").deleteOne({ _id: objectId(student._id) })
+
+         //console.log("Updated mentor", asso_mentor);
+         res.status(200).json({"Student deleted":student});
+        
+         
+         }
+         
+         clientInfo.close();
+        }
+    
+    catch (error)
+    {
+         console.error(error);
+         res.status(404).json({ "Error": error });
+    }
+    
+     
 })
 
 //Deleting a Mentor
-app.delete('/delete-mentor/:id', (req, res) => {
+app.delete('/delete-mentor/:id', async (req, res) => {
   
-    let found = 0;
-    
-    //Searching for student, if found, found=1
-    for (let i = 0; i < mentors.length; i++)
+     let clientInfo = await mongoClient.connect(dbUrl);
+    try
     {
-        if (mentors[i].mentor_id === req.params.id)
 
-        {
-            found = 1;
-            let deletedMentor = mentors[i];
-            //Remove mentor details of associated students
-            for (let k = 0; k < deletedMentor.student_ids.length; k++)
-            {
-                for (let j = 0; j < students.length; j++)
-                    if (students[j].student_id === deletedMentor.student_ids[k])
-                    {
-                        students[j].mentor_id = "";
-                        break;
-                    }
-                
-            }
-
-            mentors.splice(i, 1);
-            res.status(200).json({ "Deleted Successfully": deletedMentor });
+       
+        let db = clientInfo.db("student_mentor_db");
+        let mentor_to_be_deleted = await db.collection("mentors").findOne({ mentor_id: req.params.id });
+        if (mentor_to_be_deleted === null)
+            res.status(404).json({ "Error": "No such mentor found in database" });
         
+        else
+        {
+            //1. Get all student records of the current mentor  && 
+            //2. Remove the mentor id from each student record
+
+            await db.collection("students").updateMany({student_id:{$in: mentor_to_be_deleted.student_ids}}, { $set: { mentor_id: "" } })
+            
+            //3. Delete the current mentor
+            await db.collection("mentors").deleteOne({ _id: objectId(mentor_to_be_deleted._id) });
+
+            res.status(200).json({ "Mentor Deleted Successfully": mentor_to_be_deleted });
         }
-      
+        
     }
 
-     if(found===0)
-            res.status(400).json({ "Error": "No such Mentor available" });
+    catch (error)
+    {
+        console.log("error");
+    }
+    
+    clientInfo.close();
+    
 })
 app.listen(4001,()=>{console.log("App runs with 4001")});
