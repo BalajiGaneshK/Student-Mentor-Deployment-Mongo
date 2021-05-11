@@ -7,10 +7,11 @@ let app = express();
 let mongoClient = mongodb.MongoClient;
 const objectId = mongodb.ObjectID;
 //const dbUrl = 'mongodb://127.0.0.1:27017';
+require('dotenv').config();
 
 //Mongo Atlas data
 // username: demoDb Password: mlIF17UGQHxvFJJ1 
-//good days
+const dbUrl =  'mongodb://127.0.0.1:27017'|| process.env.DB_URL ;
 
 let st = "";
 let students = [{ "student_id": "1", "name": "Balaji", "mentor_id": "100" }, { "student_id": "2", "name": "Ganesh", "mentor_id": "101" }];
