@@ -11,8 +11,8 @@ require('dotenv').config();
 
 //Mongo Atlas data
 // username: demoDb Password: mlIF17UGQHxvFJJ1 
-const dbUrl = 'mongodb://127.0.0.1:27017' || process.env.DB_URL;
-const port = process.env.PORT || 4001;
+const dbUrl =  process.env.DB_URL;
+const port = process.env.PORT ;
 console.log("process.env.port:",process.env.PORT);
 
 let st = "";
